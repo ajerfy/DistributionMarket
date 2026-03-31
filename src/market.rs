@@ -235,14 +235,34 @@ fn validate_distribution_for_trade(
     k: f64,
     distribution: &SupportedDistribution,
 ) -> Result<(), String> {
-    if let SupportedDistribution::Normal(normal) = distribution {
-        let minimum_sigma = k.powi(2) / (b.powi(2) * PI.sqrt());
-        if normal.sigma + 1e-12 < minimum_sigma {
-            return Err(format!(
-                "normal sigma violates solvency bound: sigma={} < sigma_min={}",
-                normal.sigma, minimum_sigma
-            ));
+    let minimum_scale = k.powi(2) / (b.powi(2) * PI.sqrt());
+
+    match distribution {
+        SupportedDistribution::Normal(normal) => {
+            if normal.sigma + 1e-12 < minimum_scale {
+                return Err(format!(
+                    "normal sigma violates solvency bound: sigma={} < sigma_min={}",
+                    normal.sigma, minimum_scale
+                ));
+            }
         }
+        SupportedDistribution::Cauchy(cauchy) => {
+            if cauchy.gamma + 1e-12 < minimum_scale {
+                return Err(format!(
+                    "cauchy scale violates solvency bound: gamma={} < gamma_min={}",
+                    cauchy.gamma, minimum_scale
+                ));
+            }
+        }
+        SupportedDistribution::StudentT(student_t) => {
+            if student_t.scale + 1e-12 < minimum_scale {
+                return Err(format!(
+                    "student t scale violates solvency bound: scale={} < scale_min={}",
+                    student_t.scale, minimum_scale
+                ));
+            }
+        }
+        SupportedDistribution::Uniform(_) => {}
     }
 
     Ok(())

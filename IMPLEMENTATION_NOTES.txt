@@ -1,24 +1,9 @@
 Differences Between This Iteration and the Theoretical Distribution Market
 
-- This implementation supports a small parameterized family of distributions, mainly Normal first and Uniform second, rather than arbitrary admissible payoff functions over a continuous outcome space.
-- Market state is represented by a scaled distribution object `f(x) = lambda * p(x)` instead of a truly general function-space position that can encode multimodal, skewed, or highly irregular beliefs.
-- Collateral is computed numerically with search heuristics tuned to the Normal case, so it is practical for simulation but not a proof-grade global optimizer for all valid distributions.
-- The AMM reserve function `h(x) = b - f(x)` is implicit rather than modeled as a first-class object with independent accounting and queries.
-- LP accounting is simplified to proportional shares and cash balances instead of a full ledger of function-native claims and withdrawals across all exposures.
-- Trader positions are stored as transitions between old and new market states, which is enough for payout calculation but not yet a full transferable position system with netting and partial closes.
-- Resolution is a direct payout computation at a realized outcome, without oracle/dispute machinery, settlement latency, or production-grade bookkeeping constraints.
-- The math uses `f64`, which is suitable for research and iteration but not for invariant-critical or onchain-safe execution.
-- Uniform support exists, but the numerical search and validation path are still designed primarily around the Normal-family interpretation from the paper.
+- The library now supports Normal, Uniform, Cauchy, and Student's t distributions with generic location/scale/support hints and boundary-aware collateral search, but it still operates over a small family of parameterized densities rather than arbitrary admissible functions on a continuous outcome space.
+- Collateral, solvency, LP accounting, and resolution are still simulation-grade approximations using `f64` arithmetic and heuristic numerical optimization, so this is much more general than the first draft but not yet a proof-grade or onchain-ready implementation of the full theory.
 
 What the Final Any-Valid-Distribution Implementation Should Look Like and How to Reach It
 
-- The final market core should represent positions as validated payoff or density functions, not just named parametric distributions, so any admissible distribution can define `p(x)` and therefore `f(x) = lambda * p(x)`.
-- The API should separate exact analytic families from numerically validated families, allowing closed-form methods when available and robust numerical fallbacks when they are not.
-- A canonical admissible representation is needed for arbitrary distributions, most likely mixtures of basis distributions, splines, or piecewise densities rather than opaque user-defined black boxes.
-- Every candidate distribution should pass a validation pipeline covering non-negativity, normalization, finite L2 norm, max-density bounds, and solvency after scaling.
-- Collateral search needs to be upgraded from family-specific heuristics to a more robust global minimization framework with adaptive bracketing, multi-start search, and conservative verification.
-- LP accounting should become function-native, so LP deposits and withdrawals correspond to explicit proportional ownership of both the market exposure and collateral pool.
-- Trader positions should be promoted into first-class objects storing their payoff delta `g(x) - f(x)`, posted collateral, and settlement state to support richer composition later.
-- The codebase should add approximation backends that converge toward the same theory, such as exact symbolic families, high-precision numerical families, and discretized grid approximations.
-- The next practical milestone is to add Gaussian-mixture support, because mixtures of Normals are expressive enough to approximate many arbitrary distributions while staying close to the current design.
-- Once the representation and verification model are stable, the final step is to define a bounded serialized format that preserves these guarantees in a future Solana port.
+- The final system should represent positions as validated payoff or density functions with a common verification pipeline for normalization, finite L2 norm, max-density bounds, solvency, and safe global collateral search, regardless of whether the family is analytic, mixture-based, spline-based, or discretized.
+- The path from here is to keep the new generic search metadata model, add richer admissible families such as Gaussian mixtures or splines, promote trader and LP claims into first-class function-native objects, and only then define a bounded serialized form suitable for a future Solana port.

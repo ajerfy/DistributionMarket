@@ -1,12 +1,24 @@
 use distribution_markets::{DistributionMarket, SupportedDistribution};
 
 fn main() -> Result<(), String> {
-    let initial_distribution = SupportedDistribution::normal(95.0, 10.0)?;
-    let mut market =
-        DistributionMarket::new(50.0, 21.05026039569057, initial_distribution.clone())?;
+    run_example(
+        "Cauchy Distribution Market Simulation",
+        SupportedDistribution::cauchy(0.0, 2.0)?,
+        SupportedDistribution::cauchy(1.5, 2.0)?,
+        1.75,
+    )
+}
 
-    println!("Distribution Market Simulation");
-    println!("==============================");
+fn run_example(
+    title: &str,
+    initial_distribution: SupportedDistribution,
+    trader_distribution: SupportedDistribution,
+    outcome: f64,
+) -> Result<(), String> {
+    let mut market = DistributionMarket::new(10.0, 3.0, initial_distribution.clone())?;
+
+    println!("{title}");
+    println!("{}", "=".repeat(title.len()));
     println!();
     println!("Initial market");
     println!("  backing (b): {:.4}", market.b);
@@ -19,7 +31,6 @@ fn main() -> Result<(), String> {
     println!("  max f(x): {:.6}", market.current_f.max_value());
     println!();
 
-    let trader_distribution = SupportedDistribution::normal(100.0, 10.0)?;
     let collateral = market.trade(trader_distribution.clone())?;
     println!("Trader move");
     println!(
@@ -30,29 +41,11 @@ fn main() -> Result<(), String> {
     println!("  market cash after trade: {:.6}", market.cash);
     println!();
 
-    let minted_shares = market.add_liquidity("lp_2", 0.5)?;
-    println!("Liquidity addition");
-    println!("  LP id: lp_2");
-    println!("  proportion added: 50.00%");
-    println!("  minted LP shares: {:.6}", minted_shares);
-    println!("  new backing (b): {:.6}", market.b);
-    println!("  new invariant (k): {:.6}", market.k);
-    println!("  scaled lambda: {:.6}", market.current_f.lambda);
-    println!();
-
-    let outcome = 107.6;
     let resolution = market.resolve(outcome)?;
     println!("Resolution");
     println!("  realized outcome: {:.4}", resolution.outcome);
-    println!("  trader payouts:");
     for (trade_id, payout) in &resolution.trader_payouts {
-        println!("    trade #{trade_id}: {:.6}", payout);
-    }
-    println!("  LP payouts:");
-    let mut lp_entries: Vec<_> = resolution.lp_payouts.iter().collect();
-    lp_entries.sort_by(|left, right| left.0.cmp(right.0));
-    for (lp_id, payout) in lp_entries {
-        println!("    {lp_id}: {:.6}", payout);
+        println!("  trade #{trade_id} payout: {:.6}", payout);
     }
 
     Ok(())

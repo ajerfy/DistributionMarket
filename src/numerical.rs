@@ -1,4 +1,4 @@
-use crate::distributions::{ScaledDistribution, SupportedDistribution};
+use crate::distributions::{ScaledDistribution, Support};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SearchRange {
@@ -34,8 +34,7 @@ pub fn find_global_minimum(
     let adapted_range = adapted_search_range(old_f, new_f, search_range)?;
     let bracket = bracket_minimum(old_f, new_f, adapted_range);
     let refined = golden_section_minimum(old_f, new_f, bracket, 1e-10, 256);
-
-    Ok(refined)
+    Ok(best_minimum(old_f, new_f, refined, adapted_range))
 }
 
 pub fn verify_minimum_onchain(
@@ -58,28 +57,27 @@ fn adapted_search_range(
     new_f: &ScaledDistribution,
     default_range: SearchRange,
 ) -> Result<SearchRange, String> {
-    if let (SupportedDistribution::Normal(old_normal), SupportedDistribution::Normal(new_normal)) =
-        (&old_f.distribution, &new_f.distribution)
-    {
-        let mean_gap = (new_normal.mu - old_normal.mu).abs();
-        let sigma_scale = old_normal.sigma.max(new_normal.sigma);
-        let tail = mean_gap + 8.0 * sigma_scale;
+    let old_location = old_f.mean_hint().unwrap_or(0.0);
+    let new_location = new_f.mean_hint().unwrap_or(0.0);
+    let old_scale = old_f.sigma_hint().unwrap_or(1.0);
+    let new_scale = new_f.sigma_hint().unwrap_or(1.0);
+    let mean_span = (old_location - new_location).abs();
+    let scale_span = old_scale.max(new_scale);
+    let tail_factor = old_f.search_tail_factor().max(new_f.search_tail_factor());
 
-        if old_normal.mu < new_normal.mu {
-            return SearchRange::new(old_normal.mu - tail, old_normal.mu);
-        }
+    let mut lower = old_location.min(new_location) - mean_span - tail_factor * scale_span;
+    let mut upper = old_location.max(new_location) + mean_span + tail_factor * scale_span;
 
-        if old_normal.mu > new_normal.mu {
-            return SearchRange::new(old_normal.mu, old_normal.mu + tail);
-        }
-
-        return SearchRange::new(
-            new_normal.mu - 8.0 * sigma_scale,
-            new_normal.mu + 8.0 * sigma_scale,
-        );
+    if let Some(support) = merged_support(old_f.support_hint(), new_f.support_hint()) {
+        lower = lower.min(support.lower - scale_span.max(1.0));
+        upper = upper.max(support.upper + scale_span.max(1.0));
     }
 
-    Ok(default_range)
+    if lower.is_finite() && upper.is_finite() && upper > lower {
+        SearchRange::new(lower, upper)
+    } else {
+        Ok(default_range)
+    }
 }
 
 fn bracket_minimum(
@@ -107,6 +105,61 @@ fn bracket_minimum(
     let upper = range.lower + right_index as f64 * step;
 
     SearchRange { lower, upper }
+}
+
+fn best_minimum(
+    old_f: &ScaledDistribution,
+    new_f: &ScaledDistribution,
+    refined: MinimumResult,
+    range: SearchRange,
+) -> MinimumResult {
+    let mut best = refined;
+
+    for candidate in boundary_candidates(old_f, new_f, range) {
+        let value = position_difference(candidate, old_f, new_f);
+        if value < best.value {
+            best = MinimumResult {
+                x_min: candidate,
+                value,
+            };
+        }
+    }
+
+    best
+}
+
+fn boundary_candidates(
+    old_f: &ScaledDistribution,
+    new_f: &ScaledDistribution,
+    range: SearchRange,
+) -> Vec<f64> {
+    let mut candidates = vec![range.lower, range.upper];
+
+    if let Some(support) = old_f.support_hint() {
+        candidates.push(support.lower);
+        candidates.push(support.upper);
+    }
+
+    if let Some(support) = new_f.support_hint() {
+        candidates.push(support.lower);
+        candidates.push(support.upper);
+    }
+
+    candidates.sort_by(|left, right| left.total_cmp(right));
+    candidates.dedup_by(|left, right| (*left - *right).abs() < 1e-10);
+    candidates
+}
+
+fn merged_support(left: Option<Support>, right: Option<Support>) -> Option<Support> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(Support {
+            lower: left.lower.min(right.lower),
+            upper: left.upper.max(right.upper),
+        }),
+        (Some(left), None) => Some(left),
+        (None, Some(right)) => Some(right),
+        (None, None) => None,
+    }
 }
 
 fn golden_section_minimum(

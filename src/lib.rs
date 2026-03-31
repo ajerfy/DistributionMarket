@@ -4,8 +4,8 @@ pub mod numerical;
 pub mod scoring;
 
 pub use distributions::{
-    Distribution, NormalDistribution, ScaledDistribution, SupportedDistribution,
-    UniformDistribution,
+    CauchyDistribution, Distribution, NormalDistribution, ScaledDistribution, StudentTDistribution,
+    SupportedDistribution, UniformDistribution,
 };
 pub use market::{DistributionMarket, Resolution, TradeRecord};
 pub use numerical::{MinimumResult, SearchRange, find_global_minimum, verify_minimum_onchain};

@@ -1,6 +1,6 @@
 use crate::distributions::{
-    Distribution, NormalDistribution, ScaledDistribution, SupportedDistribution,
-    UniformDistribution,
+    CauchyDistribution, Distribution, NormalDistribution, ScaledDistribution, StudentTDistribution,
+    SupportedDistribution, UniformDistribution,
 };
 use crate::market::DistributionMarket;
 use crate::numerical::{SearchRange, find_global_minimum, verify_minimum_onchain};
@@ -162,4 +162,68 @@ fn uniform_distribution_basics_hold() {
     assert_close(uniform.cdf(-3.0), 0.0, 1e-12);
     assert_close(uniform.cdf(2.0), 1.0, 1e-12);
     assert_close(uniform.l2_norm(), 0.5, 1e-12);
+}
+
+#[test]
+fn uniform_trade_collateral_captures_endpoint_minimum() {
+    let old_distribution = SupportedDistribution::uniform(-2.0, 2.0).unwrap();
+    let new_distribution = SupportedDistribution::uniform(0.0, 4.0).unwrap();
+    let old_f = ScaledDistribution::from_l2_target(old_distribution, 2.0).unwrap();
+    let new_f = ScaledDistribution::from_l2_target(new_distribution, 2.0).unwrap();
+    let range = SearchRange::new(-4.0, 6.0).unwrap();
+    let minimum = find_global_minimum(&old_f, &new_f, range).unwrap();
+
+    assert!(minimum.x_min >= -2.0 - 1e-9);
+    assert!(minimum.x_min <= 0.0 + 1e-9);
+    assert!(minimum.value < 0.0);
+}
+
+#[test]
+fn cauchy_distribution_basics_hold() {
+    let cauchy = CauchyDistribution::new(1.5, 2.0).unwrap();
+    assert_close(cauchy.pdf(1.5), 1.0 / (std::f64::consts::PI * 2.0), 1e-12);
+    assert_close(cauchy.cdf(1.5), 0.5, 1e-12);
+    assert_close(cauchy.max_pdf(), 1.0 / (std::f64::consts::PI * 2.0), 1e-12);
+    assert_close(
+        cauchy.l2_norm(),
+        (1.0 / (4.0 * std::f64::consts::PI)).sqrt(),
+        1e-12,
+    );
+}
+
+#[test]
+fn student_t_distribution_basics_hold() {
+    let student_t = StudentTDistribution::new(0.0, 1.0, 4.0).unwrap();
+    let expected_center = 0.375;
+    assert_close(student_t.pdf(0.0), expected_center, 1e-12);
+    assert_close(student_t.cdf(0.0), 0.5, 1e-12);
+    assert!(student_t.max_pdf() > 0.0);
+    assert!(student_t.l2_norm() > 0.0);
+}
+
+#[test]
+fn student_t_large_nu_approaches_normal_center_density() {
+    let student_t = StudentTDistribution::new(0.0, 1.0, 100.0).unwrap();
+    let normal = NormalDistribution::new(0.0, 1.0).unwrap();
+    assert_close(student_t.pdf(0.0), normal.pdf(0.0), 5e-3);
+}
+
+#[test]
+fn cauchy_market_trade_requires_positive_collateral() {
+    let initial = SupportedDistribution::cauchy(0.0, 2.0).unwrap();
+    let mut market = DistributionMarket::new(10.0, 3.0, initial).unwrap();
+    let collateral = market
+        .trade(SupportedDistribution::cauchy(1.5, 2.0).unwrap())
+        .unwrap();
+    assert!(collateral > 0.0);
+}
+
+#[test]
+fn student_t_market_trade_requires_positive_collateral() {
+    let initial = SupportedDistribution::student_t(0.0, 1.25, 5.0).unwrap();
+    let mut market = DistributionMarket::new(10.0, 3.0, initial).unwrap();
+    let collateral = market
+        .trade(SupportedDistribution::student_t(1.0, 1.25, 5.0).unwrap())
+        .unwrap();
+    assert!(collateral > 0.0);
 }
