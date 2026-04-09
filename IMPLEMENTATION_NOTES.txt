@@ -7,3 +7,11 @@ What the Final Any-Valid-Distribution Implementation Should Look Like and How to
 
 - The final system should represent positions as validated payoff or density functions with a common verification pipeline for normalization, finite L2 norm, max-density bounds, solvency, and safe global collateral search, regardless of whether the family is analytic, mixture-based, spline-based, or discretized.
 - The path from here is to keep the new generic search metadata model, add richer admissible families such as Gaussian mixtures or splines, promote trader and LP claims into first-class function-native objects, and only then define a bounded serialized form suitable for a future Solana port.
+
+Differences From The Solidity Reference
+
+- This Rust implementation already supports multiple continuous distribution families, while the Solidity repo is effectively a Normal-only market with Normal-specific parameter storage and search logic.
+- The Rust code separates math, search, scoring, and market state into reusable modules, while the Solidity version concentrates most behavior in one contract plus one fixed-point math library.
+- The research market path in Rust follows the signed collateral interpretation, while the Solidity contract currently uses absolute-difference style logic in collateral and trader settlement.
+- This repo now includes a fixed-point Normal bridge specifically for parity and porting work, while the broader market engine still uses `f64` for fast iteration and design exploration.
+- The Rust design is easier to map to Solana accounts because it is token-agnostic, whereas the Solidity implementation is tightly coupled to ERC20 LP shares, ERC721 positions, and expensive onchain Newton-style math.

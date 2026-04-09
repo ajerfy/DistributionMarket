@@ -2,7 +2,12 @@ use crate::distributions::{
     CauchyDistribution, Distribution, NormalDistribution, ScaledDistribution, StudentTDistribution,
     SupportedDistribution, UniformDistribution,
 };
+use crate::fixed_point::Fixed;
 use crate::market::DistributionMarket;
+use crate::normal_math::{
+    FixedNormalDistribution, fixed_calculate_f, fixed_calculate_lambda, fixed_calculate_maximum_k,
+    fixed_calculate_minimum_sigma, fixed_required_collateral,
+};
 use crate::numerical::{SearchRange, find_global_minimum, verify_minimum_onchain};
 use crate::scoring::{collateral_is_sufficient, trader_payout};
 
@@ -226,4 +231,50 @@ fn student_t_market_trade_requires_positive_collateral() {
         .trade(SupportedDistribution::student_t(1.0, 1.25, 5.0).unwrap())
         .unwrap();
     assert!(collateral > 0.0);
+}
+
+#[test]
+fn fixed_normal_lambda_matches_solidity_reference_case() {
+    let sigma = Fixed::from_f64(10.0).unwrap();
+    let k = Fixed::from_f64(100.0).unwrap();
+    let lambda = fixed_calculate_lambda(sigma, k).unwrap();
+    assert_close(lambda.to_f64(), 595.391274861, 1e-6);
+}
+
+#[test]
+fn fixed_normal_f_matches_solidity_reference_cases() {
+    let distribution = FixedNormalDistribution::new(
+        Fixed::from_f64(100.0).unwrap(),
+        Fixed::from_f64(10.0).unwrap(),
+    )
+    .unwrap();
+    let k = Fixed::from_f64(100.0).unwrap();
+    let at_mean = fixed_calculate_f(Fixed::from_f64(100.0).unwrap(), distribution, k).unwrap();
+    let off_mean = fixed_calculate_f(Fixed::from_f64(85.0).unwrap(), distribution, k).unwrap();
+
+    assert_close(at_mean.to_f64(), 23.75268, 1e-5);
+    assert_close(off_mean.to_f64(), 7.71136, 1e-5);
+}
+
+#[test]
+fn fixed_normal_minimum_sigma_and_maximum_k_round_trip() {
+    let k = Fixed::from_f64(100.0).unwrap();
+    let b = Fixed::from_f64(100.0).unwrap();
+    let min_sigma = fixed_calculate_minimum_sigma(k, b).unwrap();
+    let max_k = fixed_calculate_maximum_k(min_sigma, b).unwrap();
+    assert_close(max_k.to_f64(), 100.0, 1e-5);
+}
+
+#[test]
+fn fixed_normal_required_collateral_matches_solidity_reference_case() {
+    let from = FixedNormalDistribution::new(
+        Fixed::from_f64(1.5).unwrap(),
+        Fixed::from_f64(0.45).unwrap(),
+    )
+    .unwrap();
+    let to =
+        FixedNormalDistribution::new(Fixed::from_f64(1.9).unwrap(), Fixed::from_f64(0.4).unwrap())
+            .unwrap();
+    let collateral = fixed_required_collateral(from, to, Fixed::from_f64(2.0).unwrap()).unwrap();
+    assert_close(collateral.to_f64(), 1.175948, 5e-3);
 }
