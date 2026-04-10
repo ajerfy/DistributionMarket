@@ -6,6 +6,7 @@ pub mod math_core;
 pub mod normal_math;
 pub mod numerical;
 pub mod scoring;
+pub mod simulation;
 
 pub use distributions::{
     CauchyDistribution, Distribution, NormalDistribution, ScaledDistribution, StudentTDistribution,
@@ -18,6 +19,10 @@ pub use normal_math::{
     fixed_calculate_minimum_sigma, fixed_required_collateral,
 };
 pub use numerical::{MinimumResult, SearchRange, find_global_minimum, verify_minimum_onchain};
+pub use simulation::{
+    SimulationReport, SimulationScenario, SimulationStep, builtin_scenarios, find_scenario,
+    render_report, run_scenario,
+};
 
 #[cfg(test)]
 mod tests;
