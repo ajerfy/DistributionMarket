@@ -4,6 +4,7 @@ use crate::distributions::{
 };
 use crate::fixed_point::Fixed;
 use crate::market::DistributionMarket;
+use crate::normal_market::FixedNormalMarket;
 use crate::normal_math::{
     FixedNormalDistribution, fixed_calculate_f, fixed_calculate_lambda, fixed_calculate_maximum_k,
     fixed_calculate_minimum_sigma, fixed_required_collateral,
@@ -277,4 +278,120 @@ fn fixed_normal_required_collateral_matches_solidity_reference_case() {
             .unwrap();
     let collateral = fixed_required_collateral(from, to, Fixed::from_f64(2.0).unwrap()).unwrap();
     assert_close(collateral.to_f64(), 1.175948, 5e-3);
+}
+
+#[test]
+fn fixed_normal_market_initializes_with_expected_state() {
+    let market = FixedNormalMarket::new(
+        Fixed::from_f64(50.0).unwrap(),
+        Fixed::from_f64(21.05026039569057).unwrap(),
+        FixedNormalDistribution::new(
+            Fixed::from_f64(95.0).unwrap(),
+            Fixed::from_f64(10.0).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    assert_close(market.b.to_f64(), 50.0, 1e-9);
+    assert_close(market.k.to_f64(), 21.05026039569057, 1e-6);
+    assert_close(market.current_lambda.to_f64(), 125.331413731, 1e-6);
+}
+
+#[test]
+fn fixed_normal_market_trade_matches_float_normal_scenario() {
+    let mut fixed_market = FixedNormalMarket::new(
+        Fixed::from_f64(50.0).unwrap(),
+        Fixed::from_f64(21.05026039569057).unwrap(),
+        FixedNormalDistribution::new(
+            Fixed::from_f64(95.0).unwrap(),
+            Fixed::from_f64(10.0).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut float_market = DistributionMarket::new(
+        50.0,
+        21.05026039569057,
+        SupportedDistribution::normal(95.0, 10.0).unwrap(),
+    )
+    .unwrap();
+
+    let fixed_collateral = fixed_market
+        .trade(
+            FixedNormalDistribution::new(
+                Fixed::from_f64(100.0).unwrap(),
+                Fixed::from_f64(10.0).unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let float_collateral = float_market
+        .trade(SupportedDistribution::normal(100.0, 10.0).unwrap())
+        .unwrap();
+
+    assert_close(fixed_collateral.to_f64(), 1.485192826, 1e-5);
+    assert_close(fixed_collateral.to_f64(), float_collateral, 1e-6);
+}
+
+#[test]
+fn fixed_normal_market_liquidity_scales_state() {
+    let mut market = FixedNormalMarket::new(
+        Fixed::from_f64(50.0).unwrap(),
+        Fixed::from_f64(21.05026039569057).unwrap(),
+        FixedNormalDistribution::new(
+            Fixed::from_f64(95.0).unwrap(),
+            Fixed::from_f64(10.0).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    let minted = market
+        .add_liquidity("lp_2", Fixed::from_f64(0.5).unwrap())
+        .unwrap();
+
+    assert_close(minted.to_f64(), 0.5, 1e-9);
+    assert_close(market.b.to_f64(), 75.0, 1e-6);
+    assert_close(market.k.to_f64(), 31.5753905935, 1e-6);
+}
+
+#[test]
+fn fixed_normal_market_resolves_consistently() {
+    let mut market = FixedNormalMarket::new(
+        Fixed::from_f64(50.0).unwrap(),
+        Fixed::from_f64(21.05026039569057).unwrap(),
+        FixedNormalDistribution::new(
+            Fixed::from_f64(95.0).unwrap(),
+            Fixed::from_f64(10.0).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    market
+        .trade(
+            FixedNormalDistribution::new(
+                Fixed::from_f64(100.0).unwrap(),
+                Fixed::from_f64(10.0).unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    market
+        .add_liquidity("lp_2", Fixed::from_f64(0.5).unwrap())
+        .unwrap();
+
+    let resolution = market.resolve(Fixed::from_f64(107.6).unwrap()).unwrap();
+    let trader_total: f64 = resolution
+        .trader_payouts
+        .iter()
+        .map(|(_, payout)| payout.to_f64())
+        .sum();
+    let lp_total: f64 = resolution
+        .lp_payouts
+        .values()
+        .map(|value| value.to_f64())
+        .sum();
+
+    assert_close(trader_total + lp_total, market.cash.to_f64(), 1e-6);
 }

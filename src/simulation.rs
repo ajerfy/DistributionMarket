@@ -1,5 +1,7 @@
 use crate::distributions::Distribution;
-use crate::{DistributionMarket, SupportedDistribution};
+use crate::{
+    DistributionMarket, Fixed, FixedNormalDistribution, FixedNormalMarket, SupportedDistribution,
+};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -122,6 +124,10 @@ pub fn find_scenario(slug: &str) -> Option<SimulationScenario> {
 }
 
 pub fn run_scenario(scenario: &SimulationScenario) -> Result<SimulationReport, String> {
+    if scenario.slug == "normal" {
+        return run_normal_fixed_scenario(scenario);
+    }
+
     let initial_distribution_label = describe_distribution(&scenario.initial_distribution);
     let initial_lambda = scenario.initial_k / scenario.initial_distribution.l2_norm();
     let initial_max_value = initial_lambda * scenario.initial_distribution.max_pdf();
@@ -172,6 +178,71 @@ pub fn run_scenario(scenario: &SimulationScenario) -> Result<SimulationReport, S
         outcome: resolution.outcome,
         trader_payouts: resolution.trader_payouts,
         lp_payouts: resolution.lp_payouts,
+    })
+}
+
+fn run_normal_fixed_scenario(scenario: &SimulationScenario) -> Result<SimulationReport, String> {
+    let initial_distribution = as_fixed_normal_distribution(&scenario.initial_distribution)?;
+    let initial_distribution_label = describe_distribution(&scenario.initial_distribution);
+    let initial_lambda = scenario.initial_k / scenario.initial_distribution.l2_norm();
+    let initial_max_value = initial_lambda * scenario.initial_distribution.max_pdf();
+    let mut market = FixedNormalMarket::new(
+        Fixed::from_f64(scenario.initial_backing)?,
+        Fixed::from_f64(scenario.initial_k)?,
+        initial_distribution,
+    )?;
+    let mut trades = Vec::new();
+    let mut liquidity_events = Vec::new();
+
+    for step in &scenario.steps {
+        match step {
+            SimulationStep::Trade { distribution } => {
+                let fixed_distribution = as_fixed_normal_distribution(distribution)?;
+                let collateral = market.trade(fixed_distribution)?;
+                trades.push(TradeSummary {
+                    distribution_label: describe_distribution(distribution),
+                    collateral: collateral.to_f64(),
+                    market_cash_after_trade: market.cash.to_f64(),
+                });
+            }
+            SimulationStep::AddLiquidity { lp_id, proportion } => {
+                let minted_shares =
+                    market.add_liquidity(lp_id.clone(), Fixed::from_f64(*proportion)?)?;
+                liquidity_events.push(LiquiditySummary {
+                    lp_id: lp_id.clone(),
+                    proportion: *proportion,
+                    minted_shares: minted_shares.to_f64(),
+                    new_backing: market.b.to_f64(),
+                    new_k: market.k.to_f64(),
+                    scaled_lambda: market.current_lambda.to_f64(),
+                });
+            }
+        }
+    }
+
+    let resolution = market.resolve(Fixed::from_f64(scenario.outcome)?)?;
+
+    Ok(SimulationReport {
+        title: scenario.title.to_string(),
+        scenario_slug: scenario.slug.to_string(),
+        initial_backing: scenario.initial_backing,
+        initial_k: scenario.initial_k,
+        initial_distribution_label,
+        initial_lambda,
+        initial_max_value,
+        trades,
+        liquidity_events,
+        outcome: resolution.outcome.to_f64(),
+        trader_payouts: resolution
+            .trader_payouts
+            .into_iter()
+            .map(|(trade_id, payout)| (trade_id, payout.to_f64()))
+            .collect(),
+        lp_payouts: resolution
+            .lp_payouts
+            .into_iter()
+            .map(|(lp_id, payout)| (lp_id, payout.to_f64()))
+            .collect(),
     })
 }
 
@@ -259,6 +330,18 @@ pub fn describe_distribution(distribution: &SupportedDistribution) -> String {
                 student_t.mu, student_t.scale, student_t.nu
             )
         }
+    }
+}
+
+fn as_fixed_normal_distribution(
+    distribution: &SupportedDistribution,
+) -> Result<FixedNormalDistribution, String> {
+    match distribution {
+        SupportedDistribution::Normal(normal) => FixedNormalDistribution::new(
+            Fixed::from_f64(normal.mu)?,
+            Fixed::from_f64(normal.sigma)?,
+        ),
+        _ => Err("fixed normal simulation path only supports normal distributions".to_string()),
     }
 }
 
