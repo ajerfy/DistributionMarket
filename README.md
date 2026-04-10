@@ -8,6 +8,13 @@ This repo now includes:
 - A fixed-point Normal math bridge and Solidity-parity tests to support eventual Solana porting work.
 - A reusable simulation layer and interactive CLI seeded by the example scenarios.
 
+## Dependencies
+
+- Rust toolchain with `cargo` and `rustc` available in your shell
+- The crates declared in [`Cargo.toml`](/Users/aaditjerfy/distribution-markets/Cargo.toml), which Cargo will download automatically on first build
+- A Unix-like shell environment that can run `source $HOME/.cargo/env` before invoking Cargo commands
+- Network access the first time you build, so Cargo can fetch Rust dependencies
+
 ## Run
 
 ```bash
