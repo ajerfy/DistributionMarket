@@ -12,7 +12,7 @@ This spec treats the fixed-point Normal engine in [`/Users/aaditjerfy/distributi
 - Invariant target: the market tracks a fixed-point Normal distribution scaled by `lambda` implied by the L2 constraint `k`.
 - Collateral model: trades post collateral against the deterministic fixed-grid maximum-loss search currently implemented for the Normal path.
 - LP model: LPs hold fungible pro rata shares of remaining market value; they do not mint ERC721-style positions.
-- Settlement model: market resolves once to a scalar realized outcome; traders settle against stored old/new Normal distributions and LPs settle against remaining funds.
+- Settlement model: market resolves once to a scalar realized outcome; traders settle against stored old/new Normal distributions and LPs settle against remaining funds, with any fixed-point rounding dust tracked explicitly as residual cash.
 
 ## Accounts
 
@@ -98,6 +98,7 @@ The quote envelope includes:
 - collateral required
 - max slippage collateral
 - search lower/upper bounds
+- coarse and refine sample counts
 - quote slot
 - quote expiry slot
 
@@ -107,6 +108,7 @@ Checks:
 - market version matches
 - proposed `sigma` respects the floor
 - verified deterministic collateral does not exceed user tolerance
+- quote search parameters match the program's bounded verifier policy
 
 Effects:
 - transfer collateral to vault
@@ -212,6 +214,11 @@ V1 should not make the program do expensive open-ended search. The intended flow
 
 This gives deterministic acceptance while keeping the instruction surface predictable.
 
+The current verifier design in the repo uses:
+- a deterministic bounded search window derived from `(mu, sigma)`
+- a coarse search pass plus a local refinement pass
+- conservative padding on the required collateral
+
 ## Mapping From Current Fixed-Point Market Operations
 
 The current fixed-point market engine maps onto Solana instructions as follows:
@@ -219,7 +226,7 @@ The current fixed-point market engine maps onto Solana instructions as follows:
 - `FixedNormalMarket::new` -> `InitializeMarket`
 - `FixedNormalMarket::trade` -> `Trade`
 - `FixedNormalMarket::add_liquidity` -> `ManageLiquidity(Add)`
-- future fixed-point `remove_liquidity` -> `ManageLiquidity(Remove)`
+- `FixedNormalMarket::remove_liquidity` -> `ManageLiquidity(Remove)`
 - `FixedNormalMarket::resolve` (market outcome write) -> `ResolveMarket`
 - `FixedNormalMarket::resolve` (trade payout branch) -> `SettlePosition`
 - `FixedNormalMarket::resolve` (LP payout branch) -> `SettleLp`
@@ -230,3 +237,4 @@ The next code step after this spec should be to:
 - add a fixed-point `remove_liquidity` path to the Normal engine
 - add quote-envelope verification helpers for the trade instruction
 - implement these account and instruction types in a Solana-facing crate or module
+- carry the current bounded verifier policy directly into program-side trade verification logic

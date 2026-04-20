@@ -16,10 +16,13 @@ pub use distributions::{
 };
 pub use fixed_point::Fixed;
 pub use market::{DistributionMarket, Resolution, TradeRecord};
-pub use normal_market::{FixedNormalMarket, FixedNormalResolution, FixedNormalTradeRecord};
+pub use normal_market::{
+    FixedNormalMarket, FixedNormalResolution, FixedNormalTradeQuote, FixedNormalTradeRecord,
+};
 pub use normal_math::{
-    FixedNormalDistribution, fixed_calculate_f, fixed_calculate_lambda, fixed_calculate_maximum_k,
-    fixed_calculate_minimum_sigma, fixed_required_collateral,
+    FixedCollateralQuote, FixedNormalDistribution, FixedSearchBounds, fixed_calculate_f,
+    fixed_calculate_lambda, fixed_calculate_maximum_k, fixed_calculate_minimum_sigma,
+    fixed_collateral_search_bounds, fixed_required_collateral, fixed_required_collateral_quote,
 };
 pub use numerical::{MinimumResult, SearchRange, find_global_minimum, verify_minimum_onchain};
 pub use solana_v1::{

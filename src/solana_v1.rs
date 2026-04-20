@@ -77,6 +77,8 @@ pub struct QuoteEnvelopeV1 {
     pub max_slippage_collateral: Fixed,
     pub search_lower_bound: Fixed,
     pub search_upper_bound: Fixed,
+    pub coarse_samples: u32,
+    pub refine_samples: u32,
     pub quote_slot: u64,
     pub quote_expiry_slot: u64,
 }
@@ -174,10 +176,10 @@ pub fn normal_v1_operation_mapping() -> Vec<SolanaOperationMappingV1> {
             verification_notes: "Program checks positive b/k, validates sigma floor, computes lambda, and stores the active Normal distribution in fixed point.",
         },
         SolanaOperationMappingV1 {
-            fixed_normal_market_method: "FixedNormalMarket::trade",
+            fixed_normal_market_method: "FixedNormalMarket::quote_trade + verify_trade_quote + trade_with_quote",
             solana_instruction: "Trade",
             account_effects: "Transfers collateral into the vault, increments market trade counter, and creates a Position PDA for the trader.",
-            verification_notes: "Client supplies a quote envelope; program verifies market version, quote expiry, sigma floor, and that collateral covers the verified deterministic search result.",
+            verification_notes: "Client supplies a bounded quote envelope; program verifies market version, quote expiry, sigma floor, search bounds, sample counts, and that collateral covers the deterministic conservative verifier result.",
         },
         SolanaOperationMappingV1 {
             fixed_normal_market_method: "FixedNormalMarket::add_liquidity",
@@ -186,7 +188,7 @@ pub fn normal_v1_operation_mapping() -> Vec<SolanaOperationMappingV1> {
             verification_notes: "Program verifies proportional scaling from current state and records LP share growth without creating a separate trade position.",
         },
         SolanaOperationMappingV1 {
-            fixed_normal_market_method: "future FixedNormalMarket::remove_liquidity",
+            fixed_normal_market_method: "FixedNormalMarket::remove_liquidity",
             solana_instruction: "ManageLiquidity(Remove)",
             account_effects: "Burns LP shares, transfers backing out of the vault, and scales b/k/lambda downward.",
             verification_notes: "Program checks the signer's LP balance and rejects withdrawals that would violate the market's active-state invariants.",

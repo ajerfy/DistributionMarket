@@ -7,7 +7,7 @@ use crate::market::DistributionMarket;
 use crate::normal_market::FixedNormalMarket;
 use crate::normal_math::{
     FixedNormalDistribution, fixed_calculate_f, fixed_calculate_lambda, fixed_calculate_maximum_k,
-    fixed_calculate_minimum_sigma, fixed_required_collateral,
+    fixed_calculate_minimum_sigma, fixed_required_collateral, fixed_required_collateral_quote,
 };
 use crate::numerical::{SearchRange, find_global_minimum, verify_minimum_onchain};
 use crate::scoring::{collateral_is_sufficient, trader_payout};
@@ -394,4 +394,225 @@ fn fixed_normal_market_resolves_consistently() {
         .sum();
 
     assert_close(trader_total + lp_total, market.cash.to_f64(), 1e-6);
+}
+
+#[test]
+fn fixed_normal_quote_verifier_accepts_fresh_quote_and_rejects_stale_quote() {
+    let mut market = FixedNormalMarket::new(
+        Fixed::from_f64(50.0).unwrap(),
+        Fixed::from_f64(21.05026039569057).unwrap(),
+        FixedNormalDistribution::new(
+            Fixed::from_f64(95.0).unwrap(),
+            Fixed::from_f64(10.0).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    let fresh_quote = market
+        .quote_trade(
+            FixedNormalDistribution::new(
+                Fixed::from_f64(100.0).unwrap(),
+                Fixed::from_f64(10.0).unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    assert!(market.verify_trade_quote(&fresh_quote).is_ok());
+
+    market.trade_with_quote(fresh_quote.clone()).unwrap();
+    assert!(market.verify_trade_quote(&fresh_quote).is_err());
+}
+
+#[test]
+fn fixed_normal_market_remove_liquidity_restores_state_after_add() {
+    let mut market = FixedNormalMarket::new(
+        Fixed::from_f64(50.0).unwrap(),
+        Fixed::from_f64(21.05026039569057).unwrap(),
+        FixedNormalDistribution::new(
+            Fixed::from_f64(95.0).unwrap(),
+            Fixed::from_f64(10.0).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    let minted = market
+        .add_liquidity("lp_2", Fixed::from_f64(0.5).unwrap())
+        .unwrap();
+    let removed = market.remove_liquidity("lp_2", minted).unwrap();
+
+    assert_close(removed.to_f64(), 25.0, 1e-6);
+    assert_close(market.b.to_f64(), 50.0, 1e-6);
+    assert_close(market.k.to_f64(), 21.05026039569057, 1e-6);
+}
+
+#[test]
+fn fixed_normal_market_handles_repeated_trades() {
+    let mut market = FixedNormalMarket::new(
+        Fixed::from_f64(50.0).unwrap(),
+        Fixed::from_f64(21.05026039569057).unwrap(),
+        FixedNormalDistribution::new(
+            Fixed::from_f64(95.0).unwrap(),
+            Fixed::from_f64(10.0).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    let targets = [97.5, 100.0, 103.0, 99.0, 104.0];
+    for target in targets {
+        let collateral = market
+            .trade(
+                FixedNormalDistribution::new(
+                    Fixed::from_f64(target).unwrap(),
+                    Fixed::from_f64(10.0).unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        assert!(collateral.raw() > 0);
+    }
+
+    assert_eq!(market.trades.len(), targets.len());
+}
+
+#[test]
+fn fixed_normal_market_handles_extreme_mean_shift() {
+    let mut market = FixedNormalMarket::new(
+        Fixed::from_f64(50.0).unwrap(),
+        Fixed::from_f64(21.05026039569057).unwrap(),
+        FixedNormalDistribution::new(
+            Fixed::from_f64(95.0).unwrap(),
+            Fixed::from_f64(10.0).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    let collateral = market
+        .trade(
+            FixedNormalDistribution::new(
+                Fixed::from_f64(140.0).unwrap(),
+                Fixed::from_f64(10.0).unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+    assert!(collateral.raw() > 0);
+    assert!(market.cash.raw() > market.b.raw());
+}
+
+#[test]
+fn fixed_normal_market_accepts_sigma_near_floor() {
+    let market = FixedNormalMarket::new(
+        Fixed::from_f64(10.0).unwrap(),
+        Fixed::from_f64(5.0).unwrap(),
+        FixedNormalDistribution::new(
+            Fixed::from_f64(0.0).unwrap(),
+            Fixed::from_f64(1.5).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let sigma = market.minimum_sigma().unwrap() + Fixed::from_f64(0.001).unwrap();
+    let quote = market
+        .quote_trade(
+            FixedNormalDistribution::new(Fixed::from_f64(0.5).unwrap(), sigma).unwrap(),
+        )
+        .unwrap();
+
+    assert!(quote.collateral_quote.collateral_required.raw() >= 0);
+}
+
+#[test]
+fn fixed_normal_market_repeated_liquidity_changes_preserve_positive_state() {
+    let mut market = FixedNormalMarket::new(
+        Fixed::from_f64(50.0).unwrap(),
+        Fixed::from_f64(21.05026039569057).unwrap(),
+        FixedNormalDistribution::new(
+            Fixed::from_f64(95.0).unwrap(),
+            Fixed::from_f64(10.0).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    let a = market
+        .add_liquidity("lp_2", Fixed::from_f64(0.25).unwrap())
+        .unwrap();
+    let b = market
+        .add_liquidity("lp_3", Fixed::from_f64(0.10).unwrap())
+        .unwrap();
+    market.remove_liquidity("lp_2", a.div_int(2)).unwrap();
+    market.remove_liquidity("lp_3", b.div_int(2)).unwrap();
+
+    assert!(market.b.raw() > 0);
+    assert!(market.k.raw() > 0);
+    assert!(market.current_lambda.raw() > 0);
+    assert!(market.total_lp_shares.raw() > 0);
+}
+
+#[test]
+fn fixed_normal_market_full_resolution_conservation_under_stress() {
+    let mut market = FixedNormalMarket::new(
+        Fixed::from_f64(50.0).unwrap(),
+        Fixed::from_f64(21.05026039569057).unwrap(),
+        FixedNormalDistribution::new(
+            Fixed::from_f64(95.0).unwrap(),
+            Fixed::from_f64(10.0).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    for target in [97.5, 100.0, 102.0, 98.0] {
+        market
+            .trade(
+                FixedNormalDistribution::new(
+                    Fixed::from_f64(target).unwrap(),
+                    Fixed::from_f64(10.0).unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+    }
+    let minted = market
+        .add_liquidity("lp_2", Fixed::from_f64(0.30).unwrap())
+        .unwrap();
+    market.remove_liquidity("lp_2", minted.div_int(3)).unwrap();
+
+    let resolution = market.resolve(Fixed::from_f64(101.25).unwrap()).unwrap();
+    let trader_total: i128 = resolution
+        .trader_payouts
+        .iter()
+        .map(|(_, payout)| payout.raw())
+        .sum();
+    let lp_total: i128 = resolution.lp_payouts.values().map(|value| value.raw()).sum();
+
+    assert_eq!(
+        trader_total + lp_total + resolution.cash_remaining.raw(),
+        market.cash.raw()
+    );
+}
+
+#[test]
+fn fixed_normal_collateral_quote_exposes_bounded_verifier_metadata() {
+    let from = FixedNormalDistribution::new(
+        Fixed::from_f64(95.0).unwrap(),
+        Fixed::from_f64(10.0).unwrap(),
+    )
+    .unwrap();
+    let to = FixedNormalDistribution::new(
+        Fixed::from_f64(100.0).unwrap(),
+        Fixed::from_f64(10.0).unwrap(),
+    )
+    .unwrap();
+    let quote = fixed_required_collateral_quote(from, to, Fixed::from_f64(21.05026039569057).unwrap()).unwrap();
+
+    assert!(quote.collateral_required.raw() > 0);
+    assert!(quote.upper_bound.raw() > quote.lower_bound.raw());
+    assert!(quote.coarse_samples > 0);
+    assert!(quote.refine_samples > 0);
 }
