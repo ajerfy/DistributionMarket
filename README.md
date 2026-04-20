@@ -11,26 +11,26 @@ This repo now includes:
 ## Dependencies
 
 - Rust toolchain with `cargo` and `rustc` available in your shell
-- The crates declared in [`Cargo.toml`](/Users/aaditjerfy/distribution-markets/Cargo.toml), which Cargo will download automatically on first build
+- The crates declared in [`Cargo.toml`](/Users/YOUR_USERNAME/distribution-markets/Cargo.toml), which Cargo will download automatically on first build
 - A Unix-like shell environment that can run `source $HOME/.cargo/env` before invoking Cargo commands
 - Network access the first time you build, so Cargo can fetch Rust dependencies
 
 ## Run
 
 ```bash
-cd /Users/aaditjerfy/distribution-markets
+cd /Users/YOUR_USERNAME/distribution-markets
 source $HOME/.cargo/env
 cargo test
 ```
 
 ```bash
-cd /Users/aaditjerfy/distribution-markets
+cd /Users/YOUR_USERNAME/distribution-markets
 source $HOME/.cargo/env
 cargo run --bin simulate
 ```
 
 ```bash
-cd /Users/aaditjerfy/distribution-markets
+cd /Users/YOUR_USERNAME/distribution-markets
 source $HOME/.cargo/env
 cargo run --bin simulate -- list
 cargo run --bin simulate -- run normal
