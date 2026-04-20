@@ -7,6 +7,7 @@ pub mod normal_market;
 pub mod normal_math;
 pub mod numerical;
 pub mod scoring;
+pub mod solana_v1;
 pub mod simulation;
 
 pub use distributions::{
@@ -21,6 +22,13 @@ pub use normal_math::{
     fixed_calculate_minimum_sigma, fixed_required_collateral,
 };
 pub use numerical::{MinimumResult, SearchRange, find_global_minimum, verify_minimum_onchain};
+pub use solana_v1::{
+    LiquidityAction, MarketStatus, NormalPositionSide, OracleConfigV1, QuoteEnvelopeV1,
+    ResolveMarketArgsV1, SettleLpArgsV1, SettlePositionArgsV1, SolanaInstructionV1,
+    SolanaMarketAccountV1, SolanaNormalPositionAccountV1, SolanaOperationMappingV1,
+    SolanaPositionSettlementV1, TradeArgsV1, current_normal_market_to_account,
+    normal_v1_operation_mapping,
+};
 pub use simulation::{
     SimulationReport, SimulationScenario, SimulationStep, builtin_scenarios, find_scenario,
     render_report, run_scenario,
