@@ -18,5 +18,5 @@ Differences From The Solidity Reference
 
 Normal-Only Solana V1 Spec Status
 
-- The current Normal-only Solana v1 market spec now lives in [`/Users/aaditjerfy/distribution-markets/specs/solana-normal-v1.md`](/Users/aaditjerfy/distribution-markets/specs/solana-normal-v1.md), with matching Rust account and instruction types in [`/Users/aaditjerfy/distribution-markets/src/solana_v1.rs`](/Users/aaditjerfy/distribution-markets/src/solana_v1.rs).
+- The current Normal-only Solana v1 market spec now lives in [`/Users/YOUR_USERNAME/distribution-markets/specs/solana-normal-v1.md`](/Users/YOUR_USERNAME/distribution-markets/specs/solana-normal-v1.md), with matching Rust account and instruction types in [`/Users/YOUR_USERNAME/distribution-markets/src/solana_v1.rs`](/Users/YOUR_USERNAME/distribution-markets/src/solana_v1.rs).
 - The fixed-point Normal engine now includes bounded quote verification, fixed-point liquidity removal, stress-tested repeated trade/liquidity behavior, and explicit residual cash tracking at resolution, which is the closest thing in the repo to the deployable v1 core.
